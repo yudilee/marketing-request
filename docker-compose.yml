@@ -3,7 +3,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: marketing_request_app
     volumes:
       - .:/var/www/html
     depends_on:
@@ -28,7 +27,6 @@ services:
   nginx:
     build:
       context: ./docker/nginx
-    image: marketing_request_nginx
     ports:
       - "8084:80"
     volumes:
