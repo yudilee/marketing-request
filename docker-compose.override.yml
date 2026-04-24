@@ -1,0 +1,8 @@
+services:
+  app:
+    volumes:
+      - .:/var/www/html
+
+  nginx:
+    volumes:
+      - .:/var/www/html
