@@ -1,8 +1,8 @@
-services:
   app:
     build:
       context: .
       dockerfile: Dockerfile
+    command: sh -c "cp -rp /var/www/html/public_backup/* /var/www/html/public/ && php-fpm"
     depends_on:
       - db
     environment:
@@ -19,6 +19,8 @@ services:
       - APP_KEY=${APP_KEY}
       - DB_USERNAME=${DB_USERNAME}
       - DB_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - public-assets:/var/www/html/public
     networks:
       - marketing-network
 
@@ -28,6 +30,8 @@ services:
       dockerfile: docker/nginx/Dockerfile
     ports:
       - "8084:80"
+    volumes:
+      - public-assets:/var/www/html/public
     depends_on:
       - app
     networks:
@@ -51,3 +55,4 @@ networks:
 
 volumes:
   db_data:
+  public-assets:
