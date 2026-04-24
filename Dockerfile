@@ -32,8 +32,11 @@ RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 /var/www/html/storage \
     && chmod -R 775 /var/www/html/bootstrap/cache
 
-# Install dependencies if you want to run composer install inside the image build
-# RUN composer install --no-interaction --optimize-autoloader
+# Install dependencies
+RUN composer install --no-interaction --optimize-autoloader
+
+# Install NPM dependencies and build assets
+RUN npm install && npm run build
 
 EXPOSE 9000
 CMD ["php-fpm"]
