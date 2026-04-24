@@ -16,8 +16,12 @@ WORKDIR /var/www/html
 # 1. Copy everything from the host public folder
 COPY public public
 
-# 2. Explicitly copy the build folder from the build stage
+# 2. Force clean and explicitly copy the build folder from the build stage
+RUN rm -rf public/build && mkdir -p public/build
 COPY --from=build-stage /app/public/build public/build
 
-# 3. Verify files exist and set permissions
-RUN ls -la public/build && chmod -R 755 public
+# 3. Create a verification file
+RUN date > public/check.txt
+
+# 4. Set permissions
+RUN chmod -R 755 public
