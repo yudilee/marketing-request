@@ -39,7 +39,7 @@ RUN composer install --no-interaction --optimize-autoloader
 RUN npm install && npm run build
 
 # Create backup of public folder for volume sync
-RUN cp -rp public public_backup
+RUN cp -rp public /opt/public_backup
 
 EXPOSE 9000
 CMD ["php-fpm"]

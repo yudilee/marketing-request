@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: sh -c "cp -rp /var/www/html/public_backup/* /var/www/html/public/ && php-fpm"
+    command: sh -c "cp -rp /opt/public_backup/* /var/www/html/public/ && php-fpm"
     depends_on:
       - db
     environment:
