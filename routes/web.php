@@ -5,6 +5,7 @@ use App\Http\Controllers\MarketingRequestController;
 use App\Http\Controllers\ProductionController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RequestCommentController;
+use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -55,6 +56,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/{request}',    [ApprovalController::class, 'show'])->name('show');
         Route::patch('/{request}',  [ApprovalController::class, 'decide'])->name('decide');
     });
+
+    // User Management (admin only)
+    Route::resource('users', UserController::class)->only(['index', 'create', 'store', 'edit', 'update', 'destroy']);
 });
 
 require __DIR__ . '/auth.php';

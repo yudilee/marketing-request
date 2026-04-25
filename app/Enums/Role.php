@@ -28,11 +28,12 @@ enum Role: string
 
     /**
      * Whether this role can participate in the approval chain.
-     * marcom (Admin Marketing) and admin are NOT approvers.
+     * admin is NOT an approver — marcom can approve for group campaigns.
      */
     public function canApprove(): bool
     {
         return in_array($this, [
+            self::Marcom,
             self::Manager,
             self::Gm,
             self::Director,

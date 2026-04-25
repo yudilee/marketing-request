@@ -93,16 +93,22 @@ class ApprovalController extends Controller
                 return back()->with('error', 'Step 2 requires GM / Branch Manager approval. You cannot act at this stage.');
             }
         } elseif ($request->is_group_campaign) {
+            $hasMarcom  = in_array('marcom', $existingApprovedRoles);
             $hasManager = in_array('manager', $existingApprovedRoles);
-            if (!$hasManager) {
-                // Step 1: must be a manager in the Aftersales department
+            if (!$hasMarcom) {
+                // Step 1: Marketing Corporate (Marcom) must approve first
+                if ($user->role !== Role::Marcom) {
+                    return back()->with('error', 'Step 1 requires Marketing Corporate approval. It is not your turn yet.');
+                }
+            } elseif (!$hasManager) {
+                // Step 2: Aftersales Manager must approve second
                 $userDept = strtolower($user->department?->name ?? '');
                 if ($user->role !== Role::Manager || !str_contains($userDept, 'aftersales')) {
-                    return back()->with('error', 'Step 1 requires the Aftersales Manager approval. It is not your turn yet.');
+                    return back()->with('error', 'Step 2 requires the Aftersales Manager approval. It is not your turn yet.');
                 }
-            }
-            if ($hasManager && $user->role !== Role::Director) {
-                return back()->with('error', 'Step 2 requires Director sign-off. You cannot act at this stage.');
+            } elseif ($user->role !== Role::Director) {
+                // Step 3: Director must approve last
+                return back()->with('error', 'Step 3 requires Director sign-off. You cannot act at this stage.');
             }
         }
         // No campaign type → any canApprove() role can finalize in one step
@@ -144,11 +150,11 @@ class ApprovalController extends Controller
             $hasGm       = in_array('gm', $approvedRoles);
             $isFinalized = $hasManager && $hasGm;
         } elseif ($request->is_group_campaign) {
-            // Group: Request By = requester (already done on submit).
-            // Only needs Aftersales Manager (manager) + Director sign-off.
+            // Group: Marketing Corporate → Aftersales Manager → Director
+            $hasMarcom   = in_array('marcom', $approvedRoles);
             $hasManager  = in_array('manager', $approvedRoles);
             $hasDirector = in_array('director', $approvedRoles);
-            $isFinalized = $hasManager && $hasDirector;
+            $isFinalized = $hasMarcom && $hasManager && $hasDirector;
         } else {
             // No campaign type set — single approval is enough
             $isFinalized = true;
