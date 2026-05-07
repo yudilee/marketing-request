@@ -120,6 +120,43 @@
                                         <span class="font-semibold">Revision note:</span> {{ $req->production_notes }}
                                     </div>
                                 @endif
+
+                                {{-- Milestone sub-stepper (on_process only) --}}
+                                @if ($req->production_status === 'on_process')
+                                    @php
+                                        $milestones = \App\Models\MarketingRequest::productionMilestoneLabels();
+                                        $current = $req->production_milestone ?? 0;
+                                    @endphp
+                                    <div class="mt-3">
+                                        {{-- Dots + connectors --}}
+                                        <div class="flex items-center">
+                                            @foreach ($milestones as $step => $label)
+                                                @if ($step > 1)
+                                                    <div
+                                                        class="flex-1 h-0.5 {{ $step - 1 < $current ? 'bg-blue-400' : 'bg-gray-200' }}">
+                                                    </div>
+                                                @endif
+                                                <div
+                                                    class="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center {{ $step <= $current ? 'bg-blue-600' : 'bg-gray-200' }}">
+                                                    @if ($step <= $current)
+                                                        <svg class="w-3 h-3 text-white" fill="none"
+                                                            stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                                stroke-width="3" d="M5 13l4 4L19 7" />
+                                                        </svg>
+                                                    @endif
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                        {{-- Labels --}}
+                                        <div class="flex justify-between mt-1.5">
+                                            @foreach ($milestones as $step => $label)
+                                                <span
+                                                    class="text-xs {{ $step <= $current ? 'text-blue-700 font-medium' : 'text-gray-400' }} whitespace-nowrap">{{ $label }}</span>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                @endif
                             </div>
 
                             {{-- Right: Action buttons (admin/marcom only) --}}
@@ -145,6 +182,23 @@
                                 @endif
 
                                 @if (auth()->user()->isMarcom() && $req->production_status === 'on_process')
+                                    {{-- Advance Milestone --}}
+                                    @if (($req->production_milestone ?? 0) < 4)
+                                        <form method="POST" action="{{ route('production.update', $req) }}">
+                                            @csrf @method('PATCH')
+                                            <input type="hidden" name="action" value="milestone">
+                                            @php $nextLabel = \App\Models\MarketingRequest::productionMilestoneLabels()[($req->production_milestone ?? 0) + 1]; @endphp
+                                            <button type="submit"
+                                                class="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm font-medium rounded-lg hover:bg-indigo-100 transition-colors">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor"
+                                                    viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                                        stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                                </svg>
+                                                {{ $nextLabel }}
+                                            </button>
+                                        </form>
+                                    @endif
                                     {{-- Send for Revision: needs notes --}}
                                     <button type="button" @click="panel = panel === 'revision' ? null : 'revision'"
                                         :class="panel === 'revision' ? 'bg-amber-600 text-white' :
@@ -156,17 +210,21 @@
                                         </svg>
                                         Send for Revision
                                     </button>
-                                    {{-- Mark Completed: needs file --}}
-                                    <button type="button" @click="panel = panel === 'complete' ? null : 'complete'"
-                                        :class="panel === 'complete' ? 'bg-green-700 text-white' :
-                                            'bg-green-600 text-white hover:bg-green-700'"
-                                        class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-colors">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                        Mark Completed
-                                    </button>
+                                    {{-- Mark Completed: only after all 4 milestones done --}}
+                                    @if (($req->production_milestone ?? 0) >= 4)
+                                        <button type="button"
+                                            @click="panel = panel === 'complete' ? null : 'complete'"
+                                            :class="panel === 'complete' ? 'bg-green-700 text-white' :
+                                                'bg-green-600 text-white hover:bg-green-700'"
+                                            class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-colors">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor"
+                                                viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            Mark Completed
+                                        </button>
+                                    @endif
                                 @endif
 
                                 @if (auth()->user()->isMarcom() && $req->production_status === 'revision')

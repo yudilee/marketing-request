@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class RequestComment extends Model
 {
-    protected $fillable = ['marketing_request_id', 'user_id', 'body'];
+    protected $fillable = ['marketing_request_id', 'user_id', 'body', 'image_path'];
 
     public function marketingRequest()
     {

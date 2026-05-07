@@ -77,6 +77,16 @@ class User extends Authenticatable
         return $this->role === Role::Manager;
     }
 
+    /**
+     * The Marcom Manager is the manager who belongs to the Marcom department.
+     * Only this person can approve calendar events at Step 1.
+     */
+    public function isMarcomManager(): bool
+    {
+        return $this->role === Role::Manager
+            && str_contains($this->department?->name ?? '', 'Marcom');
+    }
+
     public function isStaff(): bool
     {
         return $this->role === Role::Staff;

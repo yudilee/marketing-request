@@ -25,6 +25,9 @@
     <!-- Compiled Assets (Vite) -->
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 
+    <!-- Per-page head content (e.g. extra scripts/styles) -->
+    @stack('head')
+
     <style>
         /* x-cloak is already defined inline above for FOUC prevention */
 
@@ -69,6 +72,7 @@
 
                 <!-- Nav -->
                 <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+
                     <p class="px-2 py-1 text-xs font-semibold text-blue-300 uppercase tracking-wider mt-2">Menu</p>
 
                     <a href="{{ route('dashboard') }}"
@@ -107,7 +111,8 @@
                     </a>
 
                     @if (auth()->user()->canApprove())
-                        <p class="px-2 py-1 text-xs font-semibold text-blue-300 uppercase tracking-wider mt-4">Approvals
+                        <p class="px-2 py-1 text-xs font-semibold text-blue-300 uppercase tracking-wider mt-4">
+                            Approvals
                         </p>
                         <a href="{{ route('approvals.index') }}"
                             class="flex items-center px-3 py-2 text-sm font-medium rounded-lg {{ request()->routeIs('approvals.*') ? 'bg-blue-600 text-white' : 'text-blue-100 hover:bg-[#162840] hover:text-white' }} transition-colors">
@@ -147,10 +152,52 @@
                                 $activeCount = \App\Models\MarketingRequest::where('status', 'approved')
                                     ->whereIn('production_status', ['pending', 'on_process', 'revision'])
                                     ->count();
+                                $overdueCount = \App\Models\MarketingRequest::where('status', 'approved')
+                                    ->whereIn('production_status', ['pending', 'on_process', 'revision'])
+                                    ->whereDate('deadline', '<', today())
+                                    ->count();
                             @endphp
-                            @if ($activeCount > 0)
+                            @if ($overdueCount > 0)
+                                <span
+                                    class="ml-auto bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-md whitespace-nowrap">{{ $overdueCount }}
+                                    overdue</span>
+                            @elseif ($activeCount > 0)
                                 <span
                                     class="ml-auto bg-amber-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{{ $activeCount }}</span>
+                            @endif
+                        </a>
+
+                        <p class="px-2 py-1 text-xs font-semibold text-blue-300 uppercase tracking-wider mt-4">Calendar
+                        </p>
+                        <a href="{{ route('calendar.index') }}"
+                            class="flex items-center px-3 py-2 text-sm font-medium rounded-lg {{ request()->routeIs('calendar.index') || request()->routeIs('calendar.pending') ? 'bg-blue-600 text-white' : 'text-blue-100 hover:bg-[#162840] hover:text-white' }} transition-colors">
+                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            Calendar
+                        </a>
+                    @endif
+
+                    {{-- Calendar approvals: Marcom Manager, GM, Director only --}}
+                    @if (auth()->user()->isMarcomManager() ||
+                            in_array(auth()->user()->role, [\App\Enums\Role::Gm, \App\Enums\Role::Director]))
+                        @php
+                            $pendingCalStatus = auth()->user()->isMarcomManager()
+                                ? 'pending_manager'
+                                : 'pending_gm_director';
+                            $pendingCalCount = \App\Models\CalendarEvent::where('status', $pendingCalStatus)->count();
+                        @endphp
+                        <a href="{{ route('calendar.approvals') }}"
+                            class="flex items-center px-3 py-2 text-sm font-medium rounded-lg {{ request()->routeIs('calendar.approvals') ? 'bg-blue-600 text-white' : 'text-blue-100 hover:bg-[#162840] hover:text-white' }} transition-colors">
+                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                            </svg>
+                            Calendar Approvals
+                            @if ($pendingCalCount > 0)
+                                <span
+                                    class="ml-auto bg-amber-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{{ $pendingCalCount }}</span>
                             @endif
                         </a>
                     @endif
@@ -158,6 +205,7 @@
 
                 <!-- User Info -->
                 <div class="flex-shrink-0 px-3 py-4 border-t border-[#162840]">
+
                     <div class="flex items-center">
                         <div class="flex-shrink-0 w-9 h-9 bg-blue-500 rounded-full flex items-center justify-center">
                             <span
@@ -184,17 +232,145 @@
         </div>
 
         <!-- Main Content -->
-        <div class="flex flex-col flex-1 overflow-hidden">
-            <!-- Top bar (mobile) -->
-            <div class="md:hidden flex items-center justify-between h-14 px-4 bg-[#1D3557] text-white">
-                <button @click="sidebarOpen = !sidebarOpen" class="p-1">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M4 6h16M4 12h16M4 18h16" />
-                    </svg>
-                </button>
-                <span class="font-bold tracking-wider">HARTONO GROUP</span>
-                <div class="w-6"></div>
+        <div class="flex flex-col flex-1 min-w-0">
+
+            <!-- Top Navigation Bar -->
+            <div
+                class="flex-shrink-0 flex items-center justify-between h-14 px-4 md:px-6 bg-white border-b border-gray-200 z-20">
+                <!-- Left: mobile hamburger -->
+                <div class="flex items-center gap-3">
+                    <button @click="sidebarOpen = !sidebarOpen"
+                        class="md:hidden p-1.5 text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                    </button>
+                    <span
+                        class="md:hidden font-bold text-gray-700 text-sm tracking-wide">{{ config('app.name') }}</span>
+                </div>
+
+                <!-- Right: Notification Bell + User -->
+                <div class="flex items-center gap-1">
+                    {{-- Notification Bell --}}
+                    @php $unreadNotifs = auth()->user()->unreadNotifications; @endphp
+                    <div x-data="{
+                        open: false,
+                        top: 0,
+                        right: 0,
+                        toggle() {
+                            const r = this.$refs.bell.getBoundingClientRect();
+                            this.top = r.bottom + 8;
+                            this.right = window.innerWidth - r.right;
+                            this.open = !this.open;
+                        }
+                    }">
+                        <button x-ref="bell" @click="toggle()"
+                            class="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                            </svg>
+                            @if ($unreadNotifs->isNotEmpty())
+                                <span
+                                    class="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>
+                            @endif
+                        </button>
+
+                        {{-- Notification Dropdown — fixed to escape overflow:hidden ancestors --}}
+                        <div x-show="open" x-cloak @click.outside="open = false"
+                            :style="`position:fixed; top:${top}px; right:${right}px;`"
+                            x-transition:enter="transition ease-out duration-150"
+                            x-transition:enter-start="opacity-0 translate-y-1"
+                            x-transition:enter-end="opacity-100 translate-y-0"
+                            x-transition:leave="transition ease-in duration-100"
+                            x-transition:leave-start="opacity-100 translate-y-0"
+                            x-transition:leave-end="opacity-0 translate-y-1"
+                            class="w-[420px] bg-white rounded-2xl shadow-2xl border border-gray-200 z-[9999] overflow-hidden">
+
+                            {{-- Header --}}
+                            <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-base font-semibold text-gray-800">Notifications</span>
+                                    @if ($unreadNotifs->isNotEmpty())
+                                        <span
+                                            class="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{{ $unreadNotifs->count() }}</span>
+                                    @endif
+                                </div>
+                                @if ($unreadNotifs->isNotEmpty())
+                                    <form method="POST" action="{{ route('notifications.readAll') }}">
+                                        @csrf
+                                        <button type="submit"
+                                            class="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors">Mark
+                                            all read</button>
+                                    </form>
+                                @endif
+                            </div>
+
+                            @php $recentNotifs = auth()->user()->notifications()->latest()->take(15)->get(); @endphp
+
+                            @if ($recentNotifs->isEmpty())
+                                <div class="flex flex-col items-center justify-center py-14 px-6 text-center">
+                                    <div
+                                        class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                                        <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor"
+                                            viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                                d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                                        </svg>
+                                    </div>
+                                    <p class="text-base font-semibold text-gray-700">You're all caught up!</p>
+                                    <p class="text-sm text-gray-400 mt-1">No notifications yet.</p>
+                                </div>
+                            @else
+                                <div class="divide-y divide-gray-100 max-h-[460px] overflow-y-auto">
+                                    @foreach ($recentNotifs as $notif)
+                                        @php $d = $notif->data; @endphp
+                                        <a href="{{ route('notifications.read', $notif->id) }}"
+                                            class="flex items-start gap-4 px-5 py-4 hover:bg-gray-50 transition-colors {{ $notif->read_at ? 'bg-white' : 'bg-blue-50' }}">
+                                            <div
+                                                class="flex-shrink-0 w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-sm">
+                                                <span
+                                                    class="text-white text-sm font-bold">{{ strtoupper(substr($d['mentioned_by_name'], 0, 1)) }}</span>
+                                            </div>
+                                            <div class="flex-1 min-w-0">
+                                                <p class="text-sm text-gray-800 leading-snug">
+                                                    <span class="font-semibold">{{ $d['mentioned_by_name'] }}</span>
+                                                    mentioned you in
+                                                    <span
+                                                        class="font-medium text-blue-700">{{ Str::limit($d['request_purpose'], 45) }}</span>
+                                                </p>
+                                                <p class="text-sm text-gray-500 mt-1 line-clamp-2">
+                                                    {{ $d['body_preview'] }}</p>
+                                                <p class="text-xs text-gray-400 mt-1.5 flex items-center gap-1">
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
+                                                        viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                                            stroke-width="2"
+                                                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                    </svg>
+                                                    {{ $notif->created_at->diffForHumans() }}
+                                                </p>
+                                            </div>
+                                            @if (!$notif->read_at)
+                                                <span
+                                                    class="flex-shrink-0 w-2.5 h-2.5 bg-blue-500 rounded-full mt-2 ring-2 ring-blue-100"></span>
+                                            @endif
+                                        </a>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+
+                    {{-- User avatar --}}
+                    <div class="ml-2">
+                        <div class="w-8 h-8 bg-[#1D3557] rounded-full flex items-center justify-center">
+                            <span
+                                class="text-white text-xs font-semibold">{{ strtoupper(substr(auth()->user()->name, 0, 1)) }}</span>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Page Header -->
@@ -206,6 +382,41 @@
 
             <!-- Flash Messages -->
             <div class="px-6 pt-4">
+                @if (auth()->user()->isMarcom() || auth()->user()->isAdmin())
+                    @php
+                        $overdueAlertCount = \App\Models\MarketingRequest::where('status', 'approved')
+                            ->whereIn('production_status', ['pending', 'on_process', 'revision'])
+                            ->whereDate('deadline', '<', today())
+                            ->count();
+                    @endphp
+                    @if ($overdueAlertCount > 0)
+                        <div x-data="{ show: true }" x-show="show" x-cloak x-transition
+                            class="flex items-center justify-between p-4 mb-4 bg-orange-50 border border-orange-200 rounded-lg">
+                            <div class="flex items-center">
+                                <svg class="w-5 h-5 text-orange-500 mr-2 flex-shrink-0" fill="none"
+                                    stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                                <span class="text-sm text-orange-700">
+                                    <strong>{{ $overdueAlertCount }} overdue
+                                        project{{ $overdueAlertCount > 1 ? 's' : '' }}</strong> — deadline has passed
+                                    but production is not yet completed.
+                                    <a href="{{ route('production.index') }}"
+                                        class="underline font-semibold ml-1">View production queue →</a>
+                                </span>
+                            </div>
+                            <button @click="show = false"
+                                class="text-orange-400 hover:text-orange-600 ml-3 flex-shrink-0">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd"
+                                        d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                                        clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                        </div>
+                    @endif
+                @endif
                 @if (session('success'))
                     <div x-data="{ show: true }" x-show="show" x-cloak x-transition
                         class="flex items-center justify-between p-4 mb-4 bg-green-50 border border-green-200 rounded-lg">
@@ -341,6 +552,7 @@
             }, POLL_INTERVAL);
         })();
     </script>
+    @stack('scripts')
 </body>
 
 </html>

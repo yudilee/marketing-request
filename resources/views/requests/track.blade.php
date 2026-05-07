@@ -36,19 +36,84 @@
 
     <div class="py-4">
 
-        {{-- Flash messages --}}
-        @if (session('success'))
-            <div class="bg-green-50 border border-green-200 rounded-xl p-4 mb-5 flex gap-3">
-                <svg class="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd"
-                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                        clip-rule="evenodd" />
-                </svg>
-                <p class="text-sm text-green-800">{{ session('success') }}</p>
-            </div>
-        @endif
 
-        {{-- === PROGRESS STEPPER === --}}
+        {{-- === APPROVAL PROGRESS BAR === --}}
+        @php
+            $approvalStages = [
+                ['key' => 'submitted', 'label' => 'Submitted', 'desc' => 'Request submitted and awaiting review.'],
+                ['key' => 'under_review', 'label' => 'Under Review', 'desc' => 'Manager is reviewing the request.'],
+                [
+                    'key' => 'decision',
+                    'label' => $req->status === 'rejected' ? 'Rejected' : 'Approved',
+                    'desc' => $req->status === 'rejected' ? 'Request was rejected.' : 'Request fully approved.',
+                ],
+            ];
+            $approvalStatusOrder = ['submitted' => 0, 'under_review' => 1, 'approved' => 2, 'rejected' => 2];
+            $approvalCurrentIdx = $approvalStatusOrder[$req->status] ?? 0;
+        @endphp
+        {{-- <div class="bg-white rounded-xl border border-gray-100 shadow-sm mb-5">
+            <div class="px-6 py-4 border-b border-gray-100">
+                <h2 class="text-sm font-semibold text-[#1D3557] uppercase tracking-wide">Approval Progress</h2>
+            </div>
+            <div class="p-6">
+                <div class="flex items-start">
+                    @foreach ($approvalStages as $i => $stage)
+                        @php
+                            $isDone = $i < $approvalCurrentIdx;
+                            $isActive = $i === $approvalCurrentIdx;
+                            $isRejected = $isActive && $req->status === 'rejected';
+                        @endphp
+                        <div class="flex items-start {{ $i < count($approvalStages) - 1 ? 'flex-1' : '' }}">
+                            <div class="flex flex-col items-center">
+                                <div
+                                    class="w-10 h-10 rounded-full flex items-center justify-center font-bold border-2 transition-all
+                                    {{ $isDone
+                                        ? 'border-green-500 bg-green-500 text-white'
+                                        : ($isRejected
+                                            ? 'border-red-500 bg-red-500 text-white ring-4 ring-red-500/10'
+                                            : ($isActive
+                                                ? 'bg-[#1D3557] border-[#1D3557] text-white ring-4 ring-[#1D3557]/10'
+                                                : 'bg-white border-gray-200 text-gray-400')) }}">
+                                    @if ($isDone)
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                                d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    @elseif ($isRejected)
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    @elseif ($isActive && $req->status === 'approved')
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                                d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    @else
+                                        <span class="text-sm">{{ $i + 1 }}</span>
+                                    @endif
+                                </div>
+                                <span
+                                    class="text-xs mt-2 text-center font-medium whitespace-nowrap
+                                    {{ $isRejected ? 'text-red-600' : ($isActive ? 'text-[#1D3557]' : ($isDone ? 'text-green-600' : 'text-gray-400')) }}">
+                                    {{ $stage['label'] }}
+                                </span>
+                            </div>
+                            @if ($i < count($approvalStages) - 1)
+                                <div
+                                    class="flex-1 h-0.5 mx-3 mt-5 {{ $i < $approvalCurrentIdx ? 'bg-green-400' : 'bg-gray-200' }}">
+                                </div>
+                            @endif
+                        </div>
+                    @endforeach
+                </div>
+                @if ($req->manager_comment)
+                    <p class="text-xs text-gray-500 mt-4 bg-gray-50 rounded-lg px-4 py-2 border border-gray-100">
+                        <span class="font-medium text-gray-700">Manager note:</span> {{ $req->manager_comment }}
+                    </p>
+                @endif
+            </div>
+        </div> --}}
         <div class="bg-white rounded-xl border border-gray-100 shadow-sm mb-5">
             <div class="px-6 py-4 border-b border-gray-100">
                 <h2 class="text-sm font-semibold text-[#1D3557] uppercase tracking-wide">Production Progress</h2>
@@ -121,6 +186,83 @@
                         Last updated {{ $req->production_updated_at->diffForHumans() }}
                         ({{ $req->production_updated_at->format('d M Y, H:i') }})
                     </p>
+                @endif
+
+                {{-- === MILESTONE SUB-STEPS (only when On Process) === --}}
+                @if ($req->production_status === 'on_process')
+                    @php
+                        $milestones = \App\Models\MarketingRequest::productionMilestoneLabels();
+                        $milestoneIcons = [
+                            1 => 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2',
+                            2 => 'M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z',
+                            3 => 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
+                            4 => 'M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z',
+                        ];
+                        $currentMilestone = $req->production_milestone ?? 0;
+                        $milestoneTs = $req->milestone_timestamps ?? [];
+                    @endphp
+                    <div class="mt-6 border-t border-gray-100 pt-5">
+                        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4 text-center">
+                            Production Milestones</p>
+                        <div class="flex items-start justify-center gap-0">
+                            @foreach ($milestones as $step => $label)
+                                @php
+                                    $mDone = $step < $currentMilestone;
+                                    $mActive = $step === $currentMilestone;
+                                    $mTs = isset($milestoneTs[$step])
+                                        ? \Carbon\Carbon::parse($milestoneTs[$step])
+                                        : null;
+                                @endphp
+                                <div class="flex items-start {{ $step < count($milestones) ? 'flex-1' : '' }}">
+                                    <div class="flex flex-col items-center">
+                                        <div
+                                            class="w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all
+                                            {{ $mDone
+                                                ? 'bg-blue-600 border-blue-600 text-white'
+                                                : ($mActive
+                                                    ? 'bg-[#1D3557] border-[#1D3557] text-white ring-4 ring-[#1D3557]/10'
+                                                    : 'bg-white border-gray-200 text-gray-300') }}">
+                                            @if ($mDone)
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor"
+                                                    viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                                        stroke-width="2.5" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                            @else
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor"
+                                                    viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                                        stroke-width="1.8" d="{{ $milestoneIcons[$step] }}" />
+                                                </svg>
+                                            @endif
+                                        </div>
+                                        <span
+                                            class="text-xs mt-1.5 text-center font-medium leading-tight max-w-[64px]
+                                            {{ $mActive ? 'text-[#1D3557]' : ($mDone ? 'text-blue-600' : 'text-gray-300') }}">
+                                            {{ $label }}
+                                        </span>
+                                        @if ($mTs)
+                                            <span
+                                                class="text-[10px] text-gray-400 text-center mt-0.5 leading-tight max-w-[64px]">
+                                                {{ $mTs->format('d M, H:i') }}
+                                            </span>
+                                        @endif
+                                    </div>
+                                    @if ($step < count($milestones))
+                                        <div
+                                            class="flex-1 h-0.5 mx-2 mt-4 transition-all {{ $mDone ? 'bg-blue-400' : 'bg-gray-200' }}">
+                                        </div>
+                                    @endif
+                                </div>
+                            @endforeach
+                        </div>
+                        @if ($currentMilestone === 0)
+                            <p class="text-xs text-gray-400 text-center mt-3">Production is starting…</p>
+                        @else
+                            <p class="text-xs text-blue-600 font-medium text-center mt-3">Currently:
+                                {{ $milestones[$currentMilestone] }}</p>
+                        @endif
+                    </div>
                 @endif
             </div>
         </div>
@@ -300,6 +442,147 @@
                 </div>
             </div>
         @endif
+
+        {{-- === FULL ACTIVITY TIMELINE === --}}
+        @php
+            // Build a unified timeline array from all sources
+            $timelineEvents = [];
+
+            // 1. Submitted
+            $timelineEvents[] = [
+                'label' => 'Request Submitted',
+                'sub' => 'by ' . $req->user->name,
+                'at' => $req->created_at,
+                'color' => 'gray',
+                'icon' =>
+                    'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
+            ];
+
+            // 2. Each approval action (sorted by acted_at)
+            $approvalColorMap = ['approved' => 'green', 'rejected' => 'red'];
+            $approvalIconMap = [
+                'approved' => 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
+                'rejected' => 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z',
+            ];
+            foreach ($req->approvals->sortBy('acted_at') as $apv) {
+                $roleName = is_object($apv->approver?->role)
+                    ? ucfirst($apv->approver->role->value)
+                    : ucfirst($apv->approver?->role ?? 'Approver');
+                $timelineEvents[] = [
+                    'label' => ($apv->status === 'approved' ? 'Approved' : 'Rejected') . ' by ' . $roleName,
+                    'sub' => $apv->approver?->name . ($apv->comment ? ' — "' . $apv->comment . '"' : ''),
+                    'at' => $apv->acted_at,
+                    'color' => $approvalColorMap[$apv->status] ?? 'gray',
+                    'icon' => $approvalIconMap[$apv->status] ?? 'M9 12l2 2 4-4',
+                ];
+            }
+
+            // 3. Production timeline events
+            $prodEventMeta = [
+                'started' => [
+                    'label' => 'Production Started',
+                    'color' => 'blue',
+                    'icon' =>
+                        'M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+                ],
+                'revision_sent' => [
+                    'label' => 'Sent for Revision',
+                    'color' => 'amber',
+                    'icon' =>
+                        'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
+                ],
+                'resumed' => [
+                    'label' => 'Production Resumed',
+                    'color' => 'blue',
+                    'icon' =>
+                        'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15',
+                ],
+                'completed' => [
+                    'label' => 'Marked as Completed',
+                    'color' => 'green',
+                    'icon' => 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
+                ],
+            ];
+            $milestoneLabels = \App\Models\MarketingRequest::productionMilestoneLabels();
+            foreach ($req->production_timeline ?? [] as $evt) {
+                $meta = $prodEventMeta[$evt['event']] ?? ['label' => $evt['event'], 'color' => 'gray', 'icon' => ''];
+                $sub = 'by ' . ($evt['by'] ?? 'Marcom');
+                if ($evt['event'] === 'revision_sent' && !empty($evt['note'])) {
+                    $sub .= ' — "' . $evt['note'] . '"';
+                }
+                $timelineEvents[] = [
+                    'label' => $meta['label'],
+                    'sub' => $sub,
+                    'at' => \Carbon\Carbon::parse($evt['at']),
+                    'color' => $meta['color'],
+                    'icon' => $meta['icon'],
+                ];
+                // Inline milestone timestamps right after 'started' or 'resumed' that belong to this cycle
+                if (in_array($evt['event'], ['started', 'resumed']) && !empty($req->milestone_timestamps)) {
+                    foreach ($req->milestone_timestamps as $step => $ts) {
+                        $timelineEvents[] = [
+                            'label' => 'Milestone: ' . ($milestoneLabels[$step] ?? "Step $step"),
+                            'sub' => 'by Marcom',
+                            'at' => \Carbon\Carbon::parse($ts),
+                            'color' => 'indigo',
+                            'icon' => 'M13 7l5 5m0 0l-5 5m5-5H6',
+                        ];
+                    }
+                }
+            }
+
+            // Sort all events by time
+            usort($timelineEvents, fn($a, $b) => $a['at'] <=> $b['at']);
+
+            $colorClasses = [
+                'gray' => ['bg' => 'bg-gray-100', 'icon' => 'text-gray-500', 'ring' => 'ring-gray-200'],
+                'green' => ['bg' => 'bg-green-100', 'icon' => 'text-green-600', 'ring' => 'ring-green-200'],
+                'red' => ['bg' => 'bg-red-100', 'icon' => 'text-red-500', 'ring' => 'ring-red-200'],
+                'blue' => ['bg' => 'bg-blue-100', 'icon' => 'text-blue-600', 'ring' => 'ring-blue-200'],
+                'amber' => ['bg' => 'bg-amber-100', 'icon' => 'text-amber-600', 'ring' => 'ring-amber-200'],
+                'indigo' => ['bg' => 'bg-indigo-100', 'icon' => 'text-indigo-600', 'ring' => 'ring-indigo-200'],
+            ];
+        @endphp
+
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm mb-5">
+            <div class="px-6 py-4 border-b border-gray-100">
+                <h2 class="text-sm font-semibold text-[#1D3557] uppercase tracking-wide">Activity Timeline</h2>
+            </div>
+            <div class="px-6 py-5">
+                <ol class="relative">
+                    @foreach ($timelineEvents as $i => $ev)
+                        @php $cc = $colorClasses[$ev['color']] ?? $colorClasses['gray']; @endphp
+                        <li class="flex gap-4 {{ !$loop->last ? 'pb-6' : '' }}">
+                            {{-- Line + dot --}}
+                            <div class="flex flex-col items-center flex-shrink-0">
+                                <div
+                                    class="w-8 h-8 rounded-full {{ $cc['bg'] }} ring-2 {{ $cc['ring'] }} flex items-center justify-center">
+                                    <svg class="w-4 h-4 {{ $cc['icon'] }}" fill="none" stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="{{ $ev['icon'] }}" />
+                                    </svg>
+                                </div>
+                                @if (!$loop->last)
+                                    <div class="w-px flex-1 bg-gray-200 mt-1"></div>
+                                @endif
+                            </div>
+                            {{-- Content --}}
+                            <div class="pt-1 pb-1 min-w-0">
+                                <p class="text-sm font-semibold text-gray-800">{{ $ev['label'] }}</p>
+                                @if ($ev['sub'])
+                                    <p class="text-xs text-gray-500 mt-0.5 break-words">{{ $ev['sub'] }}</p>
+                                @endif
+                                <p class="text-xs text-gray-400 mt-1">
+                                    {{ $ev['at']->format('d M Y, H:i') }}
+                                    <span class="ml-1 text-gray-300">({{ $ev['at']->diffForHumans() }})</span>
+                                </p>
+                            </div>
+                        </li>
+                    @endforeach
+                </ol>
+            </div>
+        </div>
 
         {{-- Footer link --}}
         <div class="text-center">

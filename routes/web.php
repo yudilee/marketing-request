@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\ApprovalController;
+use App\Http\Controllers\CalendarController;
+use App\Http\Controllers\CalendarEventApprovalController;
 use App\Http\Controllers\MarketingRequestController;
 use App\Http\Controllers\ProductionController;
 use App\Http\Controllers\ProfileController;
@@ -47,7 +49,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Comments
     Route::post('/requests/{marketingRequest}/comments', [RequestCommentController::class, 'store'])->name('comments.store');
-    Route::delete('/comments/{comment}', [RequestCommentController::class, 'destroy'])->name('comments.destroy');
+
+    // Notifications — mark all as read
+    Route::post('/notifications/read-all', function () {
+        auth()->user()->unreadNotifications->markAsRead();
+        return back();
+    })->name('notifications.readAll');
+
+    // Notifications — mark single as read and redirect to request
+    Route::get('/notifications/{id}/read', function (string $id) {
+        $notification = auth()->user()->notifications()->findOrFail($id);
+        $notification->markAsRead();
+        $requestId = $notification->data['marketing_request_id'] ?? null;
+        if ($requestId) {
+            return redirect()->route('requests.show', $requestId);
+        }
+        return redirect()->route('dashboard');
+    })->name('notifications.read');
 
     // Approvals (manager, marcom, admin only)
     Route::middleware(\App\Http\Middleware\EnsureCanApprove::class)->prefix('approvals')->name('approvals.')->group(function () {
@@ -57,8 +75,26 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::patch('/{request}',  [ApprovalController::class, 'decide'])->name('decide');
     });
 
+    // Mention autocomplete — returns name + username for all users (accessible to all authenticated users)
+    Route::get('/users/suggestions', function () {
+        return \App\Models\User::select('id', 'name', 'username')->orderBy('name')->get();
+    })->name('users.suggestions');
+
     // User Management (admin only)
     Route::resource('users', UserController::class)->only(['index', 'create', 'store', 'edit', 'update', 'destroy']);
+
+    // Calendar (Marcom / Admin)
+    Route::get('/calendar',                            [CalendarController::class, 'index'])->name('calendar.index');
+    Route::get('/calendar/events',                     [CalendarController::class, 'events'])->name('calendar.events');
+    Route::post('/calendar',                           [CalendarController::class, 'store'])->name('calendar.store');
+    Route::get('/calendar/pending',                    [CalendarController::class, 'pending'])->name('calendar.pending');
+    Route::get('/calendar/{calendarEvent}/ical',       [CalendarController::class, 'ical'])->name('calendar.ical');
+    Route::patch('/calendar/{calendarEvent}',          [CalendarController::class, 'update'])->name('calendar.update');
+    Route::delete('/calendar/{calendarEvent}',         [CalendarController::class, 'destroy'])->name('calendar.destroy');
+
+    // Calendar event approvals (Manager, GM, Director)
+    Route::get('/calendar-approvals',                              [CalendarEventApprovalController::class, 'index'])->name('calendar.approvals');
+    Route::post('/calendar-approvals/{calendarEvent}/decide',      [CalendarEventApprovalController::class, 'decide'])->name('calendar.approvals.decide');
 });
 
 require __DIR__ . '/auth.php';

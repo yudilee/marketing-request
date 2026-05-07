@@ -30,6 +30,9 @@ class MarketingRequest extends Model
         'reviewed_by',
         'reviewed_at',
         'production_status',
+        'production_milestone',
+        'milestone_timestamps',
+        'production_timeline',
         'final_file',
         'production_notes',
         'production_updated_at',
@@ -46,6 +49,8 @@ class MarketingRequest extends Model
         'deadline'          => 'date',
         'reviewed_at'            => 'datetime',
         'production_updated_at'  => 'datetime',
+        'milestone_timestamps'   => 'array',
+        'production_timeline'    => 'array',
     ];
 
     public function user()
@@ -71,6 +76,16 @@ class MarketingRequest extends Model
     public function comments()
     {
         return $this->hasMany(RequestComment::class)->with('user')->latest();
+    }
+
+    public static function productionMilestoneLabels(): array
+    {
+        return [
+            1 => 'Brief Received',
+            2 => 'In Design',
+            3 => 'Draft Ready',
+            4 => 'Finalizing',
+        ];
     }
 
     public function getStatusBadgeAttribute(): string

@@ -77,6 +77,71 @@
             </div>
         @endif
 
+        <!-- Approval Progress Bar -->
+        @php
+            $approvalStages = [
+                ['key' => 'submitted', 'label' => 'Submitted'],
+                ['key' => 'under_review', 'label' => 'Under Review'],
+                ['key' => 'decision', 'label' => $request->status === 'rejected' ? 'Rejected' : 'Approved'],
+            ];
+            $approvalStatusOrder = ['submitted' => 0, 'under_review' => 1, 'approved' => 2, 'rejected' => 2];
+            $approvalCurrentIdx = $approvalStatusOrder[$request->status] ?? 0;
+        @endphp
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm mb-5 px-6 py-5">
+            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Approval Progress</p>
+            <div class="flex items-center">
+                @foreach ($approvalStages as $i => $stage)
+                    @php
+                        $isDone = $i < $approvalCurrentIdx;
+                        $isActive = $i === $approvalCurrentIdx;
+                        $isReject = $isActive && $request->status === 'rejected';
+                    @endphp
+                    <div class="flex items-center {{ $i < count($approvalStages) - 1 ? 'flex-1' : '' }}">
+                        <div class="flex flex-col items-center">
+                            <div
+                                class="w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all font-bold text-sm
+                                {{ $isDone
+                                    ? 'bg-green-500 border-green-500 text-white'
+                                    : ($isReject
+                                        ? 'bg-red-500 border-red-500 text-white ring-4 ring-red-100'
+                                        : ($isActive
+                                            ? 'bg-[#1D3557] border-[#1D3557] text-white ring-4 ring-blue-100'
+                                            : 'bg-white border-gray-200 text-gray-400')) }}">
+                                @if ($isDone)
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                            d="M5 13l4 4L19 7" />
+                                    </svg>
+                                @elseif ($isReject)
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                @elseif ($isActive && $request->status === 'approved')
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                            d="M5 13l4 4L19 7" />
+                                    </svg>
+                                @else
+                                    {{ $i + 1 }}
+                                @endif
+                            </div>
+                            <span
+                                class="text-xs mt-1.5 font-medium whitespace-nowrap
+                                {{ $isReject ? 'text-red-600' : ($isActive ? 'text-[#1D3557]' : ($isDone ? 'text-green-600' : 'text-gray-400')) }}">
+                                {{ $stage['label'] }}
+                            </span>
+                        </div>
+                        @if ($i < count($approvalStages) - 1)
+                            <div
+                                class="flex-1 h-0.5 mx-3 mb-5 {{ $i < $approvalCurrentIdx ? 'bg-green-400' : 'bg-gray-200' }}">
+                            </div>
+                        @endif
+                    </div>
+                @endforeach
+            </div>
+        </div>
+
         <!-- Info Grid -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5">
             <!-- Main Info -->
@@ -149,7 +214,8 @@
             <div class="space-y-4">
                 <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
                     <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Status</p>
-                    <span class="{{ $request->status_badge }} text-sm px-3 py-1.5">{{ $request->status_label }}</span>
+                    <span
+                        class="{{ $request->status_badge }} text-sm px-3 py-1.5">{{ $request->status_label }}</span>
                     @if ($request->reviewer)
                         <div class="mt-3 pt-3 border-t border-gray-50">
                             <p class="text-xs text-gray-500">Reviewed by</p>
@@ -439,6 +505,13 @@
                 @if ($request->comments->isEmpty())
                     <p class="text-sm text-gray-400 text-center py-4">No comments yet. Be the first to add a note.</p>
                 @else
+                    @php
+                        $renderMentions = fn($text) => preg_replace(
+                            '/@(\w+)/',
+                            '<span class="inline-flex items-center text-blue-600 font-semibold bg-blue-50 px-1 rounded">@$1</span>',
+                            e($text),
+                        );
+                    @endphp
                     <div class="space-y-4 mb-6">
                         @foreach ($request->comments as $comment)
                             <div class="flex gap-3">
@@ -458,25 +531,18 @@
                                         <div class="flex items-center gap-3">
                                             <span
                                                 class="text-xs text-gray-400">{{ $comment->created_at->diffForHumans() }}</span>
-                                            @if (auth()->id() === $comment->user_id || auth()->user()->canViewAllRequests())
-                                                <form method="POST"
-                                                    action="{{ route('comments.destroy', $comment) }}"
-                                                    onsubmit="return confirm('Delete this comment?')">
-                                                    @csrf
-                                                    @method('DELETE')
-                                                    <button type="submit"
-                                                        class="text-gray-300 hover:text-red-400 transition-colors">
-                                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
-                                                            viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round"
-                                                                stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                                                        </svg>
-                                                    </button>
-                                                </form>
-                                            @endif
                                         </div>
                                     </div>
-                                    <p class="text-sm text-gray-700 whitespace-pre-line">{{ $comment->body }}</p>
+                                    <p class="text-sm text-gray-700 whitespace-pre-line">{!! nl2br($renderMentions($comment->body)) !!}</p>
+                                    @if ($comment->image_path)
+                                        <div class="mt-2">
+                                            <a href="{{ asset('storage/' . $comment->image_path) }}" target="_blank">
+                                                <img src="{{ asset('storage/' . $comment->image_path) }}"
+                                                    alt="Comment image"
+                                                    class="max-h-48 rounded-lg border border-gray-200 object-cover cursor-pointer hover:opacity-90 transition">
+                                            </a>
+                                        </div>
+                                    @endif
                                 </div>
                             </div>
                         @endforeach
@@ -486,18 +552,66 @@
                 {{-- Add comment form --}}
                 @if ($request->user_id === auth()->id() || auth()->user()->canViewAllRequests())
                     <form method="POST" action="{{ route('comments.store', $request) }}"
-                        class="flex gap-3 items-start">
+                        enctype="multipart/form-data" class="flex gap-3 items-start">
                         @csrf
                         <div class="flex-shrink-0 w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center">
                             <span
                                 class="text-white text-xs font-semibold">{{ substr(auth()->user()->name, 0, 1) }}</span>
                         </div>
                         <div class="flex-1">
-                            <textarea name="body" rows="2" placeholder="Write a comment or note..."
+                            <textarea id="comment-body" name="body" rows="2"
+                                placeholder="Write a comment… use @name to mention someone"
                                 class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-400 outline-none resize-none transition @error('body') border-red-400 @enderror">{{ old('body') }}</textarea>
                             @error('body')
                                 <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
                             @enderror
+
+                            {{-- Image upload --}}
+                            <div class="mt-2" x-data="{ preview: null, fileName: '' }">
+                                <label class="flex items-center gap-2 cursor-pointer w-fit">
+                                    <span
+                                        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors border border-gray-200">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
+                                            viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                        </svg>
+                                        Attach photo
+                                    </span>
+                                    <input type="file" name="image" accept="image/*" class="hidden"
+                                        @change="
+                                            const f = $event.target.files[0];
+                                            if (f) {
+                                                fileName = f.name;
+                                                const reader = new FileReader();
+                                                reader.onload = e => preview = e.target.result;
+                                                reader.readAsDataURL(f);
+                                            } else {
+                                                preview = null; fileName = '';
+                                            }
+                                        ">
+                                </label>
+                                <template x-if="preview">
+                                    <div class="mt-2 relative inline-block">
+                                        <img :src="preview"
+                                            class="max-h-32 rounded-lg border border-gray-200 object-cover">
+                                        <button type="button"
+                                            @click="preview = null; fileName = ''; $el.closest('div').previousElementSibling.querySelector('input[type=file]').value = '';"
+                                            class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor"
+                                                viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        </button>
+                                        <p class="text-xs text-gray-400 mt-1 truncate max-w-xs" x-text="fileName"></p>
+                                    </div>
+                                </template>
+                                @error('image')
+                                    <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
+                                @enderror
+                            </div>
+
                             <div class="flex justify-end mt-2">
                                 <button type="submit"
                                     class="px-4 py-1.5 bg-[#1D3557] text-white text-xs font-semibold rounded-lg hover:bg-[#162840] transition-colors">
@@ -509,5 +623,266 @@
                 @endif
             </div>
         </div>
+
+        {{-- === ACTIVITY TIMELINE === --}}
+        @php
+            $req = $request;
+            $timelineEvents = [];
+
+            $timelineEvents[] = [
+                'label' => 'Request Submitted',
+                'sub' => 'by ' . $req->user->name,
+                'at' => $req->created_at,
+                'color' => 'gray',
+                'icon' =>
+                    'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
+            ];
+
+            foreach ($req->approvals->sortBy('acted_at') as $apv) {
+                $roleName = is_object($apv->approver?->role)
+                    ? ucfirst($apv->approver->role->value)
+                    : ucfirst($apv->approver?->role ?? 'Approver');
+                $timelineEvents[] = [
+                    'label' => ($apv->status === 'approved' ? 'Approved' : 'Rejected') . ' by ' . $roleName,
+                    'sub' => $apv->approver?->name . ($apv->comment ? ' — "' . $apv->comment . '"' : ''),
+                    'at' => $apv->acted_at,
+                    'color' => $apv->status === 'approved' ? 'green' : 'red',
+                    'icon' =>
+                        $apv->status === 'approved'
+                            ? 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'
+                            : 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z',
+                ];
+            }
+
+            $prodEventMeta = [
+                'started' => [
+                    'label' => 'Production Started',
+                    'color' => 'blue',
+                    'icon' =>
+                        'M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+                ],
+                'revision_sent' => [
+                    'label' => 'Sent for Revision',
+                    'color' => 'amber',
+                    'icon' =>
+                        'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
+                ],
+                'resumed' => [
+                    'label' => 'Production Resumed',
+                    'color' => 'blue',
+                    'icon' =>
+                        'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15',
+                ],
+                'completed' => [
+                    'label' => 'Marked as Completed',
+                    'color' => 'green',
+                    'icon' => 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
+                ],
+            ];
+            $milestoneLabels = \App\Models\MarketingRequest::productionMilestoneLabels();
+            foreach ($req->production_timeline ?? [] as $evt) {
+                $meta = $prodEventMeta[$evt['event']] ?? ['label' => $evt['event'], 'color' => 'gray', 'icon' => ''];
+                $sub = 'by ' . ($evt['by'] ?? 'Marcom');
+                if ($evt['event'] === 'revision_sent' && !empty($evt['note'])) {
+                    $sub .= ' — "' . $evt['note'] . '"';
+                }
+                $timelineEvents[] = [
+                    'label' => $meta['label'],
+                    'sub' => $sub,
+                    'at' => \Carbon\Carbon::parse($evt['at']),
+                    'color' => $meta['color'],
+                    'icon' => $meta['icon'],
+                ];
+                if (in_array($evt['event'], ['started', 'resumed']) && !empty($req->milestone_timestamps)) {
+                    foreach ($req->milestone_timestamps as $step => $ts) {
+                        $timelineEvents[] = [
+                            'label' => 'Milestone: ' . ($milestoneLabels[$step] ?? "Step $step"),
+                            'sub' => 'by Marcom',
+                            'at' => \Carbon\Carbon::parse($ts),
+                            'color' => 'indigo',
+                            'icon' => 'M13 7l5 5m0 0l-5 5m5-5H6',
+                        ];
+                    }
+                }
+            }
+
+            usort($timelineEvents, fn($a, $b) => $a['at'] <=> $b['at']);
+
+            $colorClasses = [
+                'gray' => ['bg' => 'bg-gray-100', 'icon' => 'text-gray-500', 'ring' => 'ring-gray-200'],
+                'green' => ['bg' => 'bg-green-100', 'icon' => 'text-green-600', 'ring' => 'ring-green-200'],
+                'red' => ['bg' => 'bg-red-100', 'icon' => 'text-red-500', 'ring' => 'ring-red-200'],
+                'blue' => ['bg' => 'bg-blue-100', 'icon' => 'text-blue-600', 'ring' => 'ring-blue-200'],
+                'amber' => ['bg' => 'bg-amber-100', 'icon' => 'text-amber-600', 'ring' => 'ring-amber-200'],
+                'indigo' => ['bg' => 'bg-indigo-100', 'icon' => 'text-indigo-600', 'ring' => 'ring-indigo-200'],
+            ];
+        @endphp
+
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm mt-5">
+            <div class="px-6 py-4 border-b border-gray-100">
+                <h2 class="text-sm font-semibold text-[#1D3557] uppercase tracking-wide">Activity Timeline</h2>
+            </div>
+            <div class="px-6 py-5">
+                <ol class="relative">
+                    @foreach ($timelineEvents as $ev)
+                        @php $cc = $colorClasses[$ev['color']] ?? $colorClasses['gray']; @endphp
+                        <li class="flex gap-4 {{ !$loop->last ? 'pb-6' : '' }}">
+                            <div class="flex flex-col items-center flex-shrink-0">
+                                <div
+                                    class="w-8 h-8 rounded-full {{ $cc['bg'] }} ring-2 {{ $cc['ring'] }} flex items-center justify-center">
+                                    <svg class="w-4 h-4 {{ $cc['icon'] }}" fill="none" stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="{{ $ev['icon'] }}" />
+                                    </svg>
+                                </div>
+                                @if (!$loop->last)
+                                    <div class="w-px flex-1 bg-gray-200 mt-1"></div>
+                                @endif
+                            </div>
+                            <div class="pt-1 pb-1 min-w-0">
+                                <p class="text-sm font-semibold text-gray-800">{{ $ev['label'] }}</p>
+                                @if ($ev['sub'])
+                                    <p class="text-xs text-gray-500 mt-0.5 break-words">{{ $ev['sub'] }}</p>
+                                @endif
+                                <p class="text-xs text-gray-400 mt-1">
+                                    {{ $ev['at']->format('d M Y, H:i') }}
+                                    <span class="ml-1 text-gray-300">({{ $ev['at']->diffForHumans() }})</span>
+                                </p>
+                            </div>
+                        </li>
+                    @endforeach
+                </ol>
+            </div>
+        </div>
     </div>
 </x-app-layout>
+
+@push('scripts')
+    <script>
+        (function() {
+            'use strict';
+            const textarea = document.getElementById('comment-body');
+            if (!textarea) return;
+
+            let allUsers = [];
+            let mentionStart = -1;
+            let activeIndex = -1;
+
+            fetch('{{ route('users.suggestions') }}', {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(r => r.json())
+                .then(d => {
+                    allUsers = d;
+                })
+                .catch(() => {});
+
+            const dropdown = document.createElement('div');
+            dropdown.className = 'fixed z-50 bg-white border border-gray-200 rounded-lg shadow-xl overflow-y-auto';
+            dropdown.style.cssText = 'display:none;max-height:220px;min-width:230px;';
+            document.body.appendChild(dropdown);
+
+            function escHtml(s) {
+                return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            }
+
+            function getItems() {
+                return Array.from(dropdown.querySelectorAll('.m-item'));
+            }
+
+            function setActive(i) {
+                getItems().forEach((el, idx) => el.classList.toggle('bg-blue-50', idx === i));
+                activeIndex = i;
+            }
+
+            function showDropdown(query) {
+                const filtered = allUsers.filter(u =>
+                    u.name.toLowerCase().includes(query.toLowerCase()) ||
+                    u.username.toLowerCase().includes(query.toLowerCase())
+                ).slice(0, 8);
+
+                if (!filtered.length) {
+                    dropdown.style.display = 'none';
+                    return;
+                }
+
+                dropdown.innerHTML = filtered.map(u =>
+                    `<div class="m-item flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-blue-50 text-sm" data-username="${escHtml(u.username)}">
+                <span class="w-7 h-7 rounded-full bg-blue-500 text-white flex-shrink-0 flex items-center justify-center text-xs font-semibold">${escHtml(u.name.charAt(0))}</span>
+                <div><span class="font-medium text-gray-800">${escHtml(u.name)}</span><span class="text-gray-400 text-xs ml-1">@${escHtml(u.username)}</span></div>
+            </div>`
+                ).join('');
+
+                const rect = textarea.getBoundingClientRect();
+                dropdown.style.top = (rect.bottom + 4) + 'px';
+                dropdown.style.left = rect.left + 'px';
+                dropdown.style.width = rect.width + 'px';
+                dropdown.style.display = 'block';
+                activeIndex = -1;
+
+                getItems().forEach(item => item.addEventListener('mousedown', e => {
+                    e.preventDefault();
+                    insertMention(item.dataset.username);
+                }));
+            }
+
+            function hideDropdown() {
+                dropdown.style.display = 'none';
+                mentionStart = -1;
+                activeIndex = -1;
+            }
+
+            function insertMention(username) {
+                const val = textarea.value;
+                const cur = textarea.selectionStart;
+                textarea.value = val.substring(0, mentionStart) + '@' + username + ' ' + val.substring(cur);
+                const pos = mentionStart + username.length + 2;
+                textarea.selectionStart = textarea.selectionEnd = pos;
+                textarea.focus();
+                hideDropdown();
+            }
+
+            textarea.addEventListener('input', function() {
+                const pos = this.selectionStart;
+                const before = this.value.substring(0, pos);
+                const match = before.match(/@(\w*)$/);
+                if (match) {
+                    mentionStart = pos - match[0].length;
+                    showDropdown(match[1]);
+                } else {
+                    hideDropdown();
+                }
+            });
+
+            textarea.addEventListener('keydown', function(e) {
+                if (dropdown.style.display === 'none') return;
+                const items = getItems();
+                if (e.key === 'Escape') {
+                    hideDropdown();
+                    return;
+                }
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setActive(Math.min(activeIndex + 1, items.length - 1));
+                    return;
+                }
+                if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setActive(Math.max(activeIndex - 1, 0));
+                    return;
+                }
+                if ((e.key === 'Enter' || e.key === 'Tab') && activeIndex >= 0) {
+                    e.preventDefault();
+                    insertMention(items[activeIndex].dataset.username);
+                }
+            });
+
+            document.addEventListener('click', e => {
+                if (!textarea.contains(e.target) && !dropdown.contains(e.target)) hideDropdown();
+            });
+        })();
+    </script>
+@endpush

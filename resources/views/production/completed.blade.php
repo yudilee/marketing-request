@@ -21,21 +21,10 @@
 
     <div class="py-4">
 
-        @if (session('success'))
-            <div
-                class="mb-4 px-4 py-3 bg-green-50 border border-green-200 text-green-800 text-sm rounded-lg flex items-center gap-2">
-                <svg class="w-4 h-4 flex-shrink-0 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                {{ session('success') }}
-            </div>
-        @endif
 
         @if ($requests->isEmpty())
             <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-16 text-center">
-                <svg class="w-14 h-14 text-gray-200 mx-auto mb-4" fill="none" stroke="currentColor"
-                    viewBox="0 0 24 24">
+                <svg class="w-14 h-14 text-gray-200 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                         d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>

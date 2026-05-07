@@ -497,6 +497,13 @@
                 @if ($request->comments->isEmpty())
                     <p class="text-sm text-gray-400 text-center py-4">No comments yet.</p>
                 @else
+                    @php
+                        $renderMentions = fn($text) => preg_replace(
+                            '/@(\w+)/',
+                            '<span class="inline-flex items-center text-blue-600 font-semibold bg-blue-50 px-1 rounded">@$1</span>',
+                            e($text),
+                        );
+                    @endphp
                     <div class="space-y-4 mb-6">
                         @foreach ($request->comments as $comment)
                             <div class="flex gap-3">
@@ -516,25 +523,9 @@
                                         <div class="flex items-center gap-2">
                                             <span
                                                 class="text-xs text-gray-400">{{ $comment->created_at->diffForHumans() }}</span>
-                                            @if (auth()->id() === $comment->user_id || auth()->user()->canApprove())
-                                                <form method="POST"
-                                                    action="{{ route('comments.destroy', $comment) }}"
-                                                    onsubmit="return confirm('Delete this comment?')">
-                                                    @csrf @method('DELETE')
-                                                    <button type="submit"
-                                                        class="text-gray-300 hover:text-red-400 transition-colors">
-                                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
-                                                            viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round"
-                                                                stroke-width="2"
-                                                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                        </svg>
-                                                    </button>
-                                                </form>
-                                            @endif
                                         </div>
                                     </div>
-                                    <p class="text-sm text-gray-700 whitespace-pre-line">{{ $comment->body }}</p>
+                                    <p class="text-sm text-gray-700 whitespace-pre-line">{!! nl2br($renderMentions($comment->body)) !!}</p>
                                 </div>
                             </div>
                         @endforeach
@@ -548,7 +539,7 @@
                         <span class="text-white text-xs font-semibold">{{ substr(auth()->user()->name, 0, 1) }}</span>
                     </div>
                     <div class="flex-1">
-                        <textarea name="body" rows="2" placeholder="Add a comment or note..."
+                        <textarea id="comment-body" name="body" rows="2" placeholder="Add a comment… use @name to mention someone"
                             class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-400 outline-none resize-none transition"></textarea>
                         @error('body')
                             <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
@@ -565,3 +556,132 @@
         </div>
     </div>
 </x-app-layout>
+
+@push('scripts')
+    <script>
+        (function() {
+            'use strict';
+            const textarea = document.getElementById('comment-body');
+            if (!textarea) return;
+
+            let allUsers = [];
+            let mentionStart = -1;
+            let activeIndex = -1;
+
+            fetch('{{ route('users.suggestions') }}', {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(r => r.json())
+                .then(d => {
+                    allUsers = d;
+                })
+                .catch(() => {});
+
+            const dropdown = document.createElement('div');
+            dropdown.className = 'fixed z-50 bg-white border border-gray-200 rounded-lg shadow-xl overflow-y-auto';
+            dropdown.style.cssText = 'display:none;max-height:220px;min-width:230px;';
+            document.body.appendChild(dropdown);
+
+            function escHtml(s) {
+                return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            }
+
+            function getItems() {
+                return Array.from(dropdown.querySelectorAll('.m-item'));
+            }
+
+            function setActive(i) {
+                getItems().forEach((el, idx) => el.classList.toggle('bg-blue-50', idx === i));
+                activeIndex = i;
+            }
+
+            function showDropdown(query) {
+                const filtered = allUsers.filter(u =>
+                    u.name.toLowerCase().includes(query.toLowerCase()) ||
+                    u.username.toLowerCase().includes(query.toLowerCase())
+                ).slice(0, 8);
+
+                if (!filtered.length) {
+                    dropdown.style.display = 'none';
+                    return;
+                }
+
+                dropdown.innerHTML = filtered.map(u =>
+                    `<div class="m-item flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-blue-50 text-sm" data-username="${escHtml(u.username)}">
+                <span class="w-7 h-7 rounded-full bg-blue-500 text-white flex-shrink-0 flex items-center justify-center text-xs font-semibold">${escHtml(u.name.charAt(0))}</span>
+                <div><span class="font-medium text-gray-800">${escHtml(u.name)}</span><span class="text-gray-400 text-xs ml-1">@${escHtml(u.username)}</span></div>
+            </div>`
+                ).join('');
+
+                const rect = textarea.getBoundingClientRect();
+                dropdown.style.top = (rect.bottom + 4) + 'px';
+                dropdown.style.left = rect.left + 'px';
+                dropdown.style.width = rect.width + 'px';
+                dropdown.style.display = 'block';
+                activeIndex = -1;
+
+                getItems().forEach(item => item.addEventListener('mousedown', e => {
+                    e.preventDefault();
+                    insertMention(item.dataset.username);
+                }));
+            }
+
+            function hideDropdown() {
+                dropdown.style.display = 'none';
+                mentionStart = -1;
+                activeIndex = -1;
+            }
+
+            function insertMention(username) {
+                const val = textarea.value;
+                const cur = textarea.selectionStart;
+                textarea.value = val.substring(0, mentionStart) + '@' + username + ' ' + val.substring(cur);
+                const pos = mentionStart + username.length + 2;
+                textarea.selectionStart = textarea.selectionEnd = pos;
+                textarea.focus();
+                hideDropdown();
+            }
+
+            textarea.addEventListener('input', function() {
+                const pos = this.selectionStart;
+                const before = this.value.substring(0, pos);
+                const match = before.match(/@(\w*)$/);
+                if (match) {
+                    mentionStart = pos - match[0].length;
+                    showDropdown(match[1]);
+                } else {
+                    hideDropdown();
+                }
+            });
+
+            textarea.addEventListener('keydown', function(e) {
+                if (dropdown.style.display === 'none') return;
+                const items = getItems();
+                if (e.key === 'Escape') {
+                    hideDropdown();
+                    return;
+                }
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setActive(Math.min(activeIndex + 1, items.length - 1));
+                    return;
+                }
+                if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setActive(Math.max(activeIndex - 1, 0));
+                    return;
+                }
+                if ((e.key === 'Enter' || e.key === 'Tab') && activeIndex >= 0) {
+                    e.preventDefault();
+                    insertMention(items[activeIndex].dataset.username);
+                }
+            });
+
+            document.addEventListener('click', e => {
+                if (!textarea.contains(e.target) && !dropdown.contains(e.target)) hideDropdown();
+            });
+        })();
+    </script>
+@endpush

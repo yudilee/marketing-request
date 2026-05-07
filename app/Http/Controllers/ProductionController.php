@@ -65,13 +65,39 @@ class ProductionController extends Controller
         $action = $request->input('action');
 
         switch ($action) {
+            case 'milestone':
+                // Advance milestone step (1→2→3→4) while on_process
+                if ($marketingRequest->production_status !== 'on_process') {
+                    return back()->with('error', 'Milestones are only available when On Process.');
+                }
+                $current = $marketingRequest->production_milestone ?? 0;
+                if ($current >= 4) {
+                    return back()->with('error', 'Already at the final milestone.');
+                }
+                $newMilestone = $current + 1;
+                $marketingRequest->production_milestone   = $newMilestone;
+                $marketingRequest->production_updated_at  = now();
+                // Record timestamp for this milestone
+                $timestamps = $marketingRequest->milestone_timestamps ?? [];
+                $timestamps[$newMilestone] = now()->toIso8601String();
+                $marketingRequest->milestone_timestamps = $timestamps;
+                $marketingRequest->save();
+                $labels = MarketingRequest::productionMilestoneLabels();
+                return back()->with('success', 'Milestone updated: ' . $labels[$marketingRequest->production_milestone]);
+
             case 'start':
                 // pending → on_process
                 if ($marketingRequest->production_status !== 'pending') {
                     return back()->with('error', 'Invalid action for current production status.');
                 }
                 $marketingRequest->production_status     = 'on_process';
+                $marketingRequest->production_milestone   = null;
+                $marketingRequest->milestone_timestamps   = null;
                 $marketingRequest->production_updated_at = now();
+                // Append to production timeline
+                $timeline = $marketingRequest->production_timeline ?? [];
+                $timeline[] = ['event' => 'started', 'at' => now()->toIso8601String(), 'by' => auth()->user()->name];
+                $marketingRequest->production_timeline = $timeline;
                 $marketingRequest->save();
 
                 return back()->with('success', 'Production started — status set to On Process.');
@@ -89,6 +115,10 @@ class ProductionController extends Controller
                 $marketingRequest->production_status     = 'revision';
                 $marketingRequest->production_notes      = $validated['production_notes'];
                 $marketingRequest->production_updated_at = now();
+                // Append to production timeline
+                $timeline = $marketingRequest->production_timeline ?? [];
+                $timeline[] = ['event' => 'revision_sent', 'at' => now()->toIso8601String(), 'by' => auth()->user()->name, 'note' => $validated['production_notes']];
+                $marketingRequest->production_timeline = $timeline;
                 $marketingRequest->save();
 
                 return back()->with('success', 'Request sent back for revision. The requestor has been notified.');
@@ -99,8 +129,14 @@ class ProductionController extends Controller
                     return back()->with('error', 'Invalid action for current production status.');
                 }
                 $marketingRequest->production_status     = 'on_process';
+                $marketingRequest->production_milestone   = null;
+                $marketingRequest->milestone_timestamps   = null;
                 $marketingRequest->production_notes      = null;
                 $marketingRequest->production_updated_at = now();
+                // Append to production timeline
+                $timeline = $marketingRequest->production_timeline ?? [];
+                $timeline[] = ['event' => 'resumed', 'at' => now()->toIso8601String(), 'by' => auth()->user()->name];
+                $marketingRequest->production_timeline = $timeline;
                 $marketingRequest->save();
 
                 return back()->with('success', 'Production resumed — status set to On Process.');
@@ -125,6 +161,10 @@ class ProductionController extends Controller
                 $marketingRequest->production_status     = 'completed';
                 $marketingRequest->final_file            = $path;
                 $marketingRequest->production_updated_at = now();
+                // Append to production timeline
+                $timeline = $marketingRequest->production_timeline ?? [];
+                $timeline[] = ['event' => 'completed', 'at' => now()->toIso8601String(), 'by' => auth()->user()->name];
+                $marketingRequest->production_timeline = $timeline;
                 $marketingRequest->save();
 
                 return back()->with('success', 'Request marked as Completed and final file uploaded.');
